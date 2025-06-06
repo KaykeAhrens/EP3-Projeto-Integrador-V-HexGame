@@ -276,7 +276,7 @@ def gerenciar_modelos():
     """Interface para gerenciar modelos salvos"""
     print("\n=== GERENCIAMENTO DE MODELOS ===")
     
-    # Lista todos os arquivos .pkl
+    # Lista todos os arquivos .pkl2
     modelos_disponiveis = [f for f in os.listdir('.') if f.endswith('.pkl')]
     
     if not modelos_disponiveis:
