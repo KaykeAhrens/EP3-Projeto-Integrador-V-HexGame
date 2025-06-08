@@ -1,8 +1,14 @@
 from hexGame import JogoHex
 from qlearning_agent import QlearningAgent, comparar_agentes, plotar_metricas
+from utils import listar_arquivos_drive, baixar_arquivo_drive
 import os
 import threading
 import time
+
+CAMINHO_MODELOS = "modelos_baixados" # modelos baixados do drive
+os.makedirs(CAMINHO_MODELOS, exist_ok=True)
+
+PASTA_DRIVE_ID = "1_PeNiEZy8jhmNWNFVES3bPXU6g8TNzjn"  # ID da pasta do seu Drive
 
 def menu_principal():
     """Menu principal do jogo com opções de Q-Learning"""
@@ -132,22 +138,38 @@ def jogar_contra_qlearning():
     """Interface para jogar contra um agente Q-Learning treinado"""
     print("\n=== JOGAR CONTRA AGENTE Q-LEARNING ===")
     
-    # Lista modelos disponíveis
-    modelos_disponiveis = [f for f in os.listdir('.') if f.endswith('.pkl') and 'qlearning' in f.lower()]
-    
-    if not modelos_disponiveis:
-        print("❌ Nenhum modelo Q-Learning encontrado!")
-        print("💡 Dica: Treine um agente primeiro usando a opção 2 do menu principal.")
-        return
+    # Modelos locais
+    modelos_locais = []
+    if os.path.exists(CAMINHO_MODELOS):
+        modelos_locais = [
+            {"name": f, "origem": "local"}
+            for f in os.listdir(CAMINHO_MODELOS) if f.endswith(".pkl")
+        ]
+
+    # Modelos do Drive
+    try:
+        arquivos_drive = listar_arquivos_drive(PASTA_DRIVE_ID)
+        modelos_drive = [
+            {"name": f["name"], "id": f["id"], "origem": "drive"}
+            for f in arquivos_drive
+            if f["name"].endswith(".pkl") and "qlearning" in f["name"].lower()
+        ]
+    except Exception as e:
+        print(f"⚠️ Erro ao listar modelos do Drive: {e}")
+        modelos_drive = []
+
+    modelos_disponiveis = modelos_locais + modelos_drive
     
     print("📁 Modelos disponíveis:")
     for i, modelo in enumerate(modelos_disponiveis, 1):
-        print(f"{i}. {modelo}")
+        origem = "Drive" if modelo["origem"] == "drive" else "Local"
+        print(f"{i}. {modelo['name']} [{origem}]")
     
     try:
         escolha = int(input("Escolha um modelo (número): ")) - 1
         if 0 <= escolha < len(modelos_disponiveis):
-            nome_arquivo = modelos_disponiveis[escolha]
+            modelo_escolhido = modelos_disponiveis[escolha]
+            nome_arquivo = modelo_escolhido["name"]
         else:
             print("Escolha inválida!")
             return
@@ -159,8 +181,12 @@ def jogar_contra_qlearning():
     # Carrega o agente
     try:
         # Cria um agente temporário para carregar o modelo
+        if modelo_escolhido["origem"] == "drive":
+            caminho_local = baixar_arquivo_drive(modelo_escolhido["id"], modelo_escolhido["name"])
+        else:
+            caminho_local = os.path.join(CAMINHO_MODELOS, modelo_escolhido["name"])
         agente = QlearningAgent()
-        agente.carregar_modelo(nome_arquivo)
+        agente.carregar_modelo(caminho_local)
         
         print(f"\n✅ Modelo carregado: {nome_arquivo}")
         print(f"📊 Estatísticas do modelo:")
@@ -180,29 +206,44 @@ def comparar_agentes_interface():
     """Interface para comparar Q-Learning vs Minimax"""
     print("\n=== COMPARAÇÃO Q-LEARNING VS MINIMAX ===")
     
-    # Lista modelos disponíveis
-    modelos_disponiveis = [f for f in os.listdir('.') if f.endswith('.pkl') and 'qlearning' in f.lower()]
-    
-    if not modelos_disponiveis:
-        print("❌ Nenhum modelo Q-Learning encontrado!")
-        print("💡 Dica: Treine um agente primeiro usando a opção 2 do menu principal.")
-        return
+    # Modelos locais
+    modelos_locais = []
+    if os.path.exists(CAMINHO_MODELOS):
+        modelos_locais = [
+            {"name": f, "origem": "local"}
+            for f in os.listdir(CAMINHO_MODELOS) if f.endswith(".pkl")
+        ]
+
+    # Modelos do Drive
+    try:
+        arquivos_drive = listar_arquivos_drive(PASTA_DRIVE_ID)
+        modelos_drive = [
+            {"name": f["name"], "id": f["id"], "origem": "drive"}
+            for f in arquivos_drive
+            if f["name"].endswith(".pkl") and "qlearning" in f["name"].lower()
+        ]
+    except Exception as e:
+        print(f"⚠️ Erro ao listar modelos do Drive: {e}")
+        modelos_drive = []
+
+    modelos_disponiveis = modelos_locais + modelos_drive
     
     print("📁 Modelos disponíveis:")
     for i, modelo in enumerate(modelos_disponiveis, 1):
-        print(f"{i}. {modelo}")
+        origem = "Drive" if modelo["origem"] == "drive" else "Local"
+        print(f"{i}. {modelo['name']} [{origem}]")
     
     try:
         escolha = int(input("Escolha um modelo (número): ")) - 1
         if 0 <= escolha < len(modelos_disponiveis):
-            nome_arquivo = modelos_disponiveis[escolha]
+            modelo_escolhido = modelos_disponiveis[escolha]
+            nome_arquivo = modelo_escolhido["name"]
         else:
             print("Escolha inválida!")
             return
     except ValueError:
-        nome_arquivo = input("Digite o nome do arquivo: ")
-        if not nome_arquivo.endswith('.pkl'):
-            nome_arquivo += '.pkl'
+            print("⚠️ Entrada inválida! Por favor, digite apenas o número da lista.")
+            return
     
     try:
         num_jogos = int(input("Número de jogos para comparação (padrão 100): ") or "100")
@@ -212,12 +253,16 @@ def comparar_agentes_interface():
     # Carrega o agente e executa a comparação
     try:
         agente = QlearningAgent()
-        agente.carregar_modelo(nome_arquivo)
+        if modelo_escolhido["origem"] == "drive":
+            caminho_local = baixar_arquivo_drive(modelo_escolhido["id"], modelo_escolhido["name"])
+        else:
+            caminho_local = os.path.join(CAMINHO_MODELOS, modelo_escolhido["name"])
+        agente.carregar_modelo(caminho_local)
         
         print(f"\n🔄 Iniciando comparação com {num_jogos} jogos...")
         print("⏱️ Isso pode demorar alguns minutos...")
         
-        vitorias_q, vitorias_minimax = comparar_agentes(
+        vitorias_q, vitorias_minimax, empates = comparar_agentes(
             agente, 
             num_jogos=num_jogos, 
             tamanho_tabuleiro=agente.tamanho_tabuleiro
@@ -227,6 +272,7 @@ def comparar_agentes_interface():
         print(f"\n📊 ANÁLISE DETALHADA:")
         print(f"🎯 Performance do Q-Learning: {vitorias_q/num_jogos*100:.1f}%")
         print(f"🤖 Performance do Minimax: {vitorias_minimax/num_jogos*100:.1f}%")
+        print(f"🤝 Empates: {empates} ({empates/num_jogos*100:.1f}%)")
         
         if vitorias_q > vitorias_minimax:
             print("🏆 Q-Learning se saiu melhor!")
@@ -242,73 +288,122 @@ def visualizar_metricas():
     """Interface para visualizar métricas de treinamento"""
     print("\n=== VISUALIZAÇÃO DE MÉTRICAS ===")
     
-    # Lista modelos disponíveis
-    modelos_disponiveis = [f for f in os.listdir('.') if f.endswith('.pkl') and 'qlearning' in f.lower()]
-    
+    # Modelos locais
+    modelos_locais = []
+    if os.path.exists(CAMINHO_MODELOS):
+        modelos_locais = [
+            {"name": f, "origem": "local"}
+            for f in os.listdir(CAMINHO_MODELOS) if f.endswith(".pkl")
+        ]
+
+    # Modelos do Drive
+    try:
+        arquivos_drive = listar_arquivos_drive(PASTA_DRIVE_ID)
+        modelos_drive = [
+            {"name": f["name"], "id": f["id"], "origem": "drive"}
+            for f in arquivos_drive
+            if f["name"].endswith(".pkl") and "qlearning" in f["name"].lower()
+        ]
+    except Exception as e:
+        print(f"⚠️ Erro ao listar modelos do Drive: {e}")
+        modelos_drive = []
+
+    modelos_disponiveis = modelos_locais + modelos_drive
+
     if not modelos_disponiveis:
         print("❌ Nenhum modelo Q-Learning encontrado!")
         return
-    
-    print("📁 Modelos disponíveis:")
+
+    # Lista todos os modelos
+    print("\n📁 Modelos disponíveis:")
     for i, modelo in enumerate(modelos_disponiveis, 1):
-        print(f"{i}. {modelo}")
-    
+        origem = "Drive" if modelo["origem"] == "drive" else "Local"
+        print(f"{i}. {modelo['name']} [{origem}]")
+
     try:
         escolha = int(input("Escolha um modelo (número): ")) - 1
         if 0 <= escolha < len(modelos_disponiveis):
-            nome_arquivo = modelos_disponiveis[escolha]
+            modelo = modelos_disponiveis[escolha]
+            if modelo["origem"] == "drive":
+                caminho_local = baixar_arquivo_drive(modelo["id"], modelo["name"])
+            else:
+                caminho_local = os.path.join(CAMINHO_MODELOS, modelo["name"])
         else:
-            print("Escolha inválida!")
+            print("❌ Escolha inválida!")
             return
     except ValueError:
-        nome_arquivo = input("Digite o nome do arquivo: ")
-        if not nome_arquivo.endswith('.pkl'):
-            nome_arquivo += '.pkl'
-    
+        print("❌ Entrada inválida.")
+        return
+
     try:
         agente = QlearningAgent()
-        agente.carregar_modelo(nome_arquivo)
+        agente.carregar_modelo(caminho_local)
         plotar_metricas(agente)
     except Exception as e:
         print(f"❌ Erro ao carregar modelo: {e}")
 
+
 def gerenciar_modelos():
-    """Interface para gerenciar modelos salvos"""
+    """Interface para gerenciar modelos salvos locais e do Google Drive"""
     print("\n=== GERENCIAMENTO DE MODELOS ===")
-    
-    # Lista todos os arquivos .pkl2
-    modelos_disponiveis = [f for f in os.listdir('.') if f.endswith('.pkl')]
-    
+
+    # Modelos locais
+    modelos_locais = []
+    if os.path.exists(CAMINHO_MODELOS):
+        modelos_locais = [
+            {"name": f, "origem": "local"}
+            for f in os.listdir(CAMINHO_MODELOS) if f.endswith(".pkl")
+        ]
+
+    # Modelos no Google Drive
+    try:
+        arquivos_drive = listar_arquivos_drive(PASTA_DRIVE_ID)
+        modelos_drive = [
+            {"name": f["name"], "id": f["id"], "origem": "drive"}
+            for f in arquivos_drive if f["name"].endswith(".pkl")
+        ]
+    except Exception as e:
+        print(f"⚠️ Erro ao listar modelos do Drive: {e}")
+        modelos_drive = []
+
+    modelos_disponiveis = modelos_locais + modelos_drive
+
     if not modelos_disponiveis:
         print("❌ Nenhum modelo encontrado!")
         return
-    
+
     print("📁 Modelos disponíveis:")
     for i, modelo in enumerate(modelos_disponiveis, 1):
-        tamanho_arquivo = os.path.getsize(modelo) / (1024*1024)  # MB
-        print(f"{i}. {modelo} ({tamanho_arquivo:.1f} MB)")
-    
+        origem = "Drive" if modelo["origem"] == "drive" else "Local"
+        print(f"{i}. {modelo['name']} [{origem}]")
+
     print("\n=== OPÇÕES ===")
     print("1. 📊 Ver detalhes de um modelo")
-    print("2. 🗑️ Deletar um modelo")
-    print("3. 📄 Renomear um modelo")
+    print("2. 🗑️  Deletar um modelo (apenas local)")
+    print("3. 📄 Renomear um modelo (apenas local)")
     print("4. 🔙 Voltar ao menu principal")
-    
+
     opcao = input("Escolha uma opção: ")
-    
+
     if opcao == "1":
         try:
             escolha = int(input("Escolha um modelo para ver detalhes (número): ")) - 1
             if 0 <= escolha < len(modelos_disponiveis):
-                nome_arquivo = modelos_disponiveis[escolha]
+                modelo = modelos_disponiveis[escolha]
+
+                if modelo["origem"] == "drive":
+                    caminho_local = baixar_arquivo_drive(modelo["id"], modelo["name"])
+                else:
+                    caminho_local = os.path.join(CAMINHO_MODELOS, modelo["name"])
+
                 agente = QlearningAgent()
-                agente.carregar_modelo(nome_arquivo)
-                
-                print(f"\n📊 DETALHES DO MODELO: {nome_arquivo}")
+                agente.carregar_modelo(caminho_local)
+
+                print(f"\n📊 DETALHES DO MODELO: {modelo['name']}")
                 print(f"🎯 Tamanho do tabuleiro: {agente.tamanho_tabuleiro}x{agente.tamanho_tabuleiro}")
                 print(f"🧠 Tamanho da Q-table: {len(agente.q_table)} entradas")
                 print(f"📈 Parâmetros: α={agente.alpha}, γ={agente.gamma}")
-                
+
                 total_jogos = agente.vitorias + agente.derrotas
                 if total_jogos > 0:
                     print(f"🏆 Vitórias: {agente.vitorias} ({agente.vitorias/total_jogos*100:.1f}%)")
@@ -316,34 +411,50 @@ def gerenciar_modelos():
                     print(f"🎮 Total de episódios: {total_jogos}")
         except Exception as e:
             print(f"❌ Erro: {e}")
-    
+
     elif opcao == "2":
         try:
-            escolha = int(input("Escolha um modelo para deletar (número): ")) - 1
+            escolha = int(input("Escolha um modelo local para deletar (número): ")) - 1
             if 0 <= escolha < len(modelos_disponiveis):
-                nome_arquivo = modelos_disponiveis[escolha]
-                confirmar = input(f"❗ Tem certeza que deseja deletar '{nome_arquivo}'? (s/n): ").lower()
-                if confirmar == 's':
-                    os.remove(nome_arquivo)
-                    print(f"✅ Modelo '{nome_arquivo}' deletado com sucesso!")
+                modelo = modelos_disponiveis[escolha]
+                if modelo["origem"] == "local":
+                    confirmar = input(f"❗ Tem certeza que deseja deletar '{modelo['name']}'? (s/n): ").lower()
+                    if confirmar == 's':
+                        os.remove(os.path.join(CAMINHO_MODELOS, modelo["name"]))
+                        print(f"✅ Modelo '{modelo['name']}' deletado com sucesso!")
+                    else:
+                        print("❌ Operação cancelada.")
                 else:
-                    print("❌ Operação cancelada.")
+                    print("❌ Não é possível deletar arquivos do Drive.")
         except Exception as e:
             print(f"❌ Erro ao deletar: {e}")
-    
+
     elif opcao == "3":
         try:
-            escolha = int(input("Escolha um modelo para renomear (número): ")) - 1
+            escolha = int(input("Escolha um modelo local para renomear (número): ")) - 1
             if 0 <= escolha < len(modelos_disponiveis):
-                nome_antigo = modelos_disponiveis[escolha]
-                nome_novo = input("Digite o novo nome (sem extensão): ")
-                if not nome_novo.endswith('.pkl'):
-                    nome_novo += '.pkl'
-                
-                os.rename(nome_antigo, nome_novo)
-                print(f"✅ Modelo renomeado de '{nome_antigo}' para '{nome_novo}'!")
+                modelo = modelos_disponiveis[escolha]
+                if modelo["origem"] == "local":
+                    nome_antigo = modelo["name"]
+                    nome_novo = input("Digite o novo nome (sem extensão): ")
+                    if not nome_novo.endswith('.pkl'):
+                        nome_novo += '.pkl'
+
+                    os.rename(
+                        os.path.join(CAMINHO_MODELOS, nome_antigo),
+                        os.path.join(CAMINHO_MODELOS, nome_novo)
+                    )
+                    print(f"✅ Modelo renomeado de '{nome_antigo}' para '{nome_novo}'!")
+                else:
+                    print("❌ Não é possível renomear arquivos do Drive.")
         except Exception as e:
             print(f"❌ Erro ao renomear: {e}")
+
+    elif opcao == "4":
+        return
+
+    else:
+        print("❌ Opção inválida.")
 
 def main():
     """Função principal com loop do menu"""

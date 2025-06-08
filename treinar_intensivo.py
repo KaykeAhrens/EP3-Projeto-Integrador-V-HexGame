@@ -1,327 +1,337 @@
 #!/usr/bin/env python3
 """
-Script de treinamento otimizado para Q-Learning Hex
-Treina automaticamente em fases progressivas para melhor performance
+Script de Treinamento Intensivo para Agente Hex Q-Learning
+Execute este script para treinar automaticamente seu agente com parâmetros otimizados
 """
 
 import os
 import time
 from datetime import datetime
 from qlearning_agent import QlearningAgent, comparar_agentes, plotar_metricas
+from utils import listar_arquivos_drive, baixar_arquivo_drive
 
-class TreinadorOtimizado:
-    def __init__(self):
-        self.historico_treinamentos = []
-        
-    def treinar_fase_progressiva(self):
-        """Treina em fases progressivas para otimizar o aprendizado"""
-        
-        fases = [
-            {
-                'nome': 'Fundamentos',
-                'tamanho': 5,
-                'episodios': 50000,
-                'oponente': 'aleatorio',
-                'alpha': 0.15,
-                'gamma': 0.95,
-                'epsilon_decay': 0.9995
-            },
-            {
-                'nome': 'Intermediário',
-                'tamanho': 7,
-                'episodios': 100000,
-                'oponente': 'aleatorio',
-                'alpha': 0.1,
-                'gamma': 0.96,
-                'epsilon_decay': 0.9996
-            },
-            {
-                'nome': 'Avançado_Aleatorio',
-                'tamanho': 11,
-                'episodios': 150000,
-                'oponente': 'aleatorio',
-                'alpha': 0.08,
-                'gamma': 0.97,
-                'epsilon_decay': 0.9997
-            },
-            {
-                'nome': 'Elite_vs_Minimax',
-                'tamanho': 11,
-                'episodios': 200000,
-                'oponente': 'minimax',
-                'alpha': 0.05,
-                'gamma': 0.98,
-                'epsilon_decay': 0.9998
-            }
-        ]
-        
-        agente_anterior = None
-        
-        for i, fase in enumerate(fases):
-            print(f"\n{'='*60}")
-            print(f"🚀 INICIANDO FASE {i+1}: {fase['nome']}")
-            print(f"{'='*60}")
-            print(f"📋 Configurações:")
-            print(f"   - Tabuleiro: {fase['tamanho']}x{fase['tamanho']}")
-            print(f"   - Episódios: {fase['episodios']:,}")
-            print(f"   - Oponente: {fase['oponente']}")
-            print(f"   - α: {fase['alpha']}, γ: {fase['gamma']}")
-            print(f"   - Epsilon decay: {fase['epsilon_decay']}")
-            
-            # Cria novo agente ou transfere conhecimento
-            if agente_anterior and fase['tamanho'] == 11:
-                print("🔄 Transferindo conhecimento do agente anterior...")
-                agente = self.transferir_conhecimento(agente_anterior, fase)
-            else:
-                agente = QlearningAgent(
-                    tamanho_tabuleiro=fase['tamanho'],
-                    alpha=fase['alpha'],
-                    gamma=fase['gamma'],
-                    epsilon=1.0,
-                    epsilon_decay=fase['epsilon_decay']
-                )
-            
-            # Nome do arquivo único
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-            nome_arquivo = f"qlearning_fase{i+1}_{fase['nome']}_{timestamp}.pkl"
-            
-            # Treina a fase
-            inicio = time.time()
-            agente.treinar(
-                num_episodios=fase['episodios'],
-                oponente=fase['oponente'],
-                salvar_a_cada=max(1000, fase['episodios']//20),
-                nome_arquivo=nome_arquivo
-            )
-            tempo_fase = time.time() - inicio
-            
-            # Avalia performance
-            self.avaliar_fase(agente, fase, tempo_fase)
-            
-            # Salva melhor modelo se for a última fase
-            if i == len(fases) - 1:
-                agente.salvar_modelo("qlearning_MELHOR_MODELO.pkl")
-                print("💾 Modelo final salvo como 'qlearning_MELHOR_MODELO.pkl'")
-            
-            agente_anterior = agente
-            
-        print("\n🎉 TREINAMENTO PROGRESSIVO CONCLUÍDO!")
-        return agente
-    
-    def transferir_conhecimento(self, agente_origem, config_destino):
-        """Transfere conhecimento de um agente menor para um maior"""
-        novo_agente = QlearningAgent(
-            tamanho_tabuleiro=config_destino['tamanho'],
-            alpha=config_destino['alpha'],
-            gamma=config_destino['gamma'],
-            epsilon=0.5,  # Começa com menos exploração
-            epsilon_decay=config_destino['epsilon_decay']
-        )
-        
-        # Copia experiências relevantes (estados menores)
-        for (estado, acao), valor in agente_origem.q_table.items():
-            tabuleiro_tuple, jogador = estado
-            # Se o estado cabe no novo tabuleiro, transfere conhecimento
-            if (len(tabuleiro_tuple) <= config_destino['tamanho'] and 
-                len(tabuleiro_tuple[0]) <= config_destino['tamanho']):
-                novo_agente.q_table[(estado, acao)] = valor * 0.8  # Reduz um pouco a confiança
-        
-        print(f"📚 Transferidas {len(novo_agente.q_table)} experiências")
-        return novo_agente
-    
-    def avaliar_fase(self, agente, config_fase, tempo_treinamento):
-        """Avalia a performance de uma fase de treinamento"""
-        print(f"\n📊 AVALIAÇÃO DA FASE {config_fase['nome']}:")
-        print(f"⏱️ Tempo de treinamento: {tempo_treinamento/3600:.2f} horas")
-        
-        total_jogos = agente.vitorias + agente.derrotas + agente.empates
-        if total_jogos > 0:
-            taxa_vitoria = agente.vitorias / total_jogos * 100
-            print(f"🏆 Taxa de vitórias: {taxa_vitoria:.2f}%")
-            print(f"📈 Q-table size: {len(agente.q_table):,} entradas")
-            print(f"🎯 Epsilon final: {agente.epsilon:.4f}")
-            
-            # Teste rápido contra minimax se não for a fase de minimax
-            if config_fase['oponente'] != 'minimax' and config_fase['tamanho'] >= 7:
-                print("🧪 Teste rápido contra Minimax (20 jogos)...")
-                v_q, v_m, e = comparar_agentes(agente, 20, config_fase['tamanho'])
-                taxa_vs_minimax = v_q / 20 * 100
-                print(f"🤖 vs Minimax: {taxa_vs_minimax:.1f}% de vitórias")
-    
-    def treinar_noturno_automatico(self, duracao_horas=8):
-        """Treina automaticamente durante a noite"""
-        print(f"🌙 MODO TREINAMENTO NOTURNO - {duracao_horas}h")
-        
-        inicio = time.time()
-        fim_planejado = inicio + (duracao_horas * 3600)
-        
-        # Estratégia adaptativa baseada no tempo disponível
-        if duracao_horas >= 8:
-            # Noite completa - treinamento progressivo
-            return self.treinar_fase_progressiva()
-        else:
-            # Tempo limitado - foco em uma fase específica
-            return self.treinar_intensivo_rapido(duracao_horas)
-    
-    def treinar_intensivo_rapido(self, horas_disponiveis):
-        """Treinamento intensivo para tempo limitado"""
-        episodios = int(horas_disponiveis * 15000)  # ~15k episódios por hora
-        
-        print(f"⚡ TREINAMENTO INTENSIVO - {episodios:,} episódios")
-        
-        agente = QlearningAgent(
-            tamanho_tabuleiro=11,
-            alpha=0.1,
-            gamma=0.97,
-            epsilon=1.0,
-            epsilon_decay=0.9995
-        )
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-        nome_arquivo = f"qlearning_intensivo_{episodios//1000}k_{timestamp}.pkl"
-        
-        agente.treinar(
-            num_episodios=episodios,
-            oponente='aleatorio',
-            salvar_a_cada=max(500, episodios//20),
-            nome_arquivo=nome_arquivo
-        )
-        
-        return agente
+CAMINHO_MODELOS = "modelos_baixados" # modelos baixados do drive
+os.makedirs(CAMINHO_MODELOS, exist_ok=True)
 
-def menu_treinamento_otimizado():
-    """Menu para escolher o tipo de treinamento"""
-    print("🎯 TREINAMENTO OTIMIZADO Q-LEARNING")
-    print("="*50)
-    print("1. 🌙 Treinamento Noturno Automático (8h)")
-    print("2. ⚡ Treinamento Intensivo Rápido")
-    print("3. 🚀 Treinamento Progressivo Completo")
-    print("4. 🧪 Teste de Configuração Personalizada")
-    print("5. 🔄 Continuar treinamento existente")
+PASTA_DRIVE_ID = "1_PeNiEZy8jhmNWNFVES3bPXU6g8TNzjn"  # ID da pasta do seu Drive
+
+def treinar_agente_intensivo():
+    """Treina o agente seguindo uma estratégia progressiva otimizada"""
     
-    escolha = input("Escolha uma opção: ")
+    print("🚀 TREINAMENTO INTENSIVO INICIADO")
+    print("=" * 60)
     
-    treinador = TreinadorOtimizado()
+    # Parâmetros otimizados
+    PARAMETROS = {
+        'tamanho_tabuleiro': 7,
+        'alpha': 0.15,
+        'gamma': 0.95,
+        'epsilon': 1.0,
+        'epsilon_decay': 0.9995,
+        'epsilon_min': 0.05
+    }
     
-    if escolha == "1":
-        horas = int(input("Quantas horas disponíveis (padrão 8)? ") or "8")
-        agente = treinador.treinar_noturno_automatico(horas)
-        
-    elif escolha == "2":
-        horas = int(input("Quantas horas disponíveis? "))
-        agente = treinador.treinar_intensivo_rapido(horas)
-        
-    elif escolha == "3":
-        print("🚀 Iniciando treinamento progressivo completo...")
-        print("⚠️  Isso pode levar 20-30 horas total!")
-        confirmar = input("Continuar? (s/n): ").lower()
-        if confirmar == 's':
-            agente = treinador.treinar_fase_progressiva()
+    # Verifica se já existe um modelo em treinamento
+    modelo_existente = None
+    for arquivo in os.listdir('.'):
+        if arquivo.startswith('hex_intensivo_') and arquivo.endswith('.pkl'):
+            modelo_existente = arquivo
+            break
+    
+    if modelo_existente:
+        print(f"📂 Modelo existente encontrado: {modelo_existente}")
+        continuar = input("Deseja continuar o treinamento existente? (s/n): ").lower()
+        if continuar == 's':
+            agente = QlearningAgent(**PARAMETROS)
+            agente.carregar_modelo(modelo_existente)
+            print("✅ Modelo carregado com sucesso!")
         else:
-            return
-            
-    elif escolha == "4":
-        agente = treinar_personalizado()
-        
-    elif escolha == "5":
-        agente = continuar_treinamento_existente()
-    
+            agente = QlearningAgent(**PARAMETROS)
     else:
-        print("Opção inválida!")
-        return
+        agente = QlearningAgent(**PARAMETROS)
     
-    # Opções pós-treinamento
-    print("\n🎯 TREINAMENTO CONCLUÍDO!")
-    print("O que deseja fazer?")
-    print("1. 🤖 Testar contra Minimax")
-    print("2. 🎮 Jogar contra o agente")
-    print("3. 📊 Ver métricas de treinamento")
+    # === FASE 1: FUNDAMENTOS ===
+    print("\n🎯 FASE 1: TREINAMENTO BÁSICO (vs Aleatório)")
+    print("Objetivo: Aprender regras básicas e movimentos fundamentais")
     
-    pos_opcao = input("Escolha: ")
+    fase1_nome = f"hex_intensivo_fase1_{datetime.now().strftime('%Y%m%d_%H%M')}.pkl"
     
-    if pos_opcao == "1":
-        num_jogos = int(input("Número de jogos (padrão 100): ") or "100")
-        comparar_agentes(agente, num_jogos, agente.tamanho_tabuleiro)
-    elif pos_opcao == "2":
-        agente.jogar_contra_humano()
-    elif pos_opcao == "3":
-        plotar_metricas(agente)
+    try:
+        agente.treinar(
+            num_episodios=25000,
+            oponente='aleatorio',
+            salvar_a_cada=2500,
+            nome_arquivo=fase1_nome
+        )
+        
+        # Avaliação Fase 1
+        print("\n📊 AVALIAÇÃO FASE 1:")
+        avaliar_agente(agente, "Fase 1")
+        
+    except KeyboardInterrupt:
+        print("\n⏸️ Treinamento interrompido pelo usuário")
+        agente.salvar_modelo(fase1_nome)
+        return agente
+    
+    # === FASE 2: REFINAMENTO ===
+    print("\n🧠 FASE 2: TREINAMENTO AVANÇADO (vs Minimax)")
+    print("Objetivo: Desenvolver estratégias mais sofisticadas")
+    
+    # Ajusta parâmetros para fase avançada
+    agente.epsilon = 0.3
+    agente.alpha = 0.1
+    
+    fase2_nome = f"hex_intensivo_fase2_{datetime.now().strftime('%Y%m%d_%H%M')}.pkl"
+    
+    try:
+        agente.treinar(
+            num_episodios=20000,
+            oponente='minimax',
+            salvar_a_cada=2000,
+            nome_arquivo=fase2_nome
+        )
+        
+        # Avaliação Fase 2
+        print("\n📊 AVALIAÇÃO FASE 2:")
+        avaliar_agente(agente, "Fase 2")
+        
+    except KeyboardInterrupt:
+        print("\n⏸️ Treinamento interrompido pelo usuário")
+        agente.salvar_modelo(fase2_nome)
+        return agente
+    
+    # === FASE 3: POLIMENTO ===
+    print("\n✨ FASE 3: POLIMENTO FINAL")
+    print("Objetivo: Otimizar estratégias e reduzir inconsistências")
+    
+    # Parâmetros finais
+    agente.epsilon = 0.1
+    agente.alpha = 0.05
+    
+    fase3_nome = f"hex_intensivo_FINAL_{datetime.now().strftime('%Y%m%d_%H%M')}.pkl"
+    
+    try:
+        agente.treinar(
+            num_episodios=15000,
+            oponente='minimax',
+            salvar_a_cada=1500,
+            nome_arquivo=fase3_nome
+        )
+        
+        # Avaliação Final
+        print("\n🏆 AVALIAÇÃO FINAL:")
+        avaliar_agente(agente, "Final")
+        
+    except KeyboardInterrupt:
+        print("\n⏸️ Treinamento interrompido pelo usuário")
+        agente.salvar_modelo(fase3_nome)
+        return agente
+    
+    # Salva modelo final
+    modelo_final = f"hex_PRONTO_PARA_JOGAR_{datetime.now().strftime('%Y%m%d_%H%M')}.pkl"
+    agente.salvar_modelo(modelo_final)
+    
+    print(f"\n🎉 TREINAMENTO COMPLETO!")
+    print(f"📁 Modelo final salvo como: {modelo_final}")
+    print("🎮 Seu agente está pronto para o desafio!")
+    
+    return agente
 
-def treinar_personalizado():
-    """Permite configuração personalizada de treinamento"""
-    print("\n🔧 CONFIGURAÇÃO PERSONALIZADA")
+def avaliar_agente(agente, fase):
+    """Avalia o desempenho do agente"""
+    total_jogos = agente.vitorias + agente.derrotas + agente.empates
     
-    tamanho = int(input("Tamanho do tabuleiro (5-11): ") or "11")
-    episodios = int(input("Número de episódios: ") or "100000")
+    if total_jogos > 0:
+        taxa_vitoria = agente.vitorias / total_jogos * 100
+        print(f"   📈 Taxa de vitórias: {taxa_vitoria:.1f}%")
+        print(f"   🎯 Total de jogos: {total_jogos}")
+        print(f"   🧠 Tamanho Q-table: {len(agente.q_table)} estados")
+        print(f"   🔍 Epsilon atual: {agente.epsilon:.3f}")
     
-    print("Oponente: 1-Aleatório, 2-Minimax")
-    oponente = "minimax" if input("Escolha: ") == "2" else "aleatorio"
-    
-    alpha = float(input("Taxa de aprendizado α (0.01-0.2): ") or "0.1")
-    gamma = float(input("Fator de desconto γ (0.9-0.99): ") or "0.95")
+    # Teste rápido contra Minimax
+    print(f"   ⚔️ Testando {fase} contra Minimax (50 jogos)...")
+    vit_q, vit_m, emp = comparar_agentes(agente, num_jogos=50, tamanho_tabuleiro=agente.tamanho_tabuleiro)
+    taxa_contra_minimax = vit_q / 50 * 100
+    print(f"   🏆 Performance vs Minimax: {taxa_contra_minimax:.1f}% vitórias")
+
+def treinar_rapido():
+    """Versão rápida para testes"""
+    print("⚡ TREINAMENTO RÁPIDO (TESTE)")
     
     agente = QlearningAgent(
-        tamanho_tabuleiro=tamanho,
-        alpha=alpha,
-        gamma=gamma,
+        tamanho_tabuleiro=7,
+        alpha=0.2,
+        gamma=0.95,
         epsilon=1.0,
-        epsilon_decay=0.9995
+        epsilon_decay=0.999,
+        epsilon_min=0.1
     )
     
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    nome_arquivo = f"qlearning_custom_{timestamp}.pkl"
-    
+    # Treinamento condensado
     agente.treinar(
-        num_episodios=episodios,
-        oponente=oponente,
-        salvar_a_cada=max(500, episodios//20),
-        nome_arquivo=nome_arquivo
+        num_episodios=5000,
+        oponente='aleatorio',
+        salvar_a_cada=1000,
+        nome_arquivo='hex_teste_rapido.pkl'
     )
+    
+    # Teste contra Minimax
+    vit_q, vit_m, emp = comparar_agentes(agente, 20, agente.tamanho_tabuleiro)
+    print(f"Performance contra Minimax: {vit_q/20*100:.1f}% vitórias")
     
     return agente
 
 def continuar_treinamento_existente():
-    """Continua o treinamento de um modelo existente"""
-    print("\n🔄 CONTINUAR TREINAMENTO")
-    
-    modelos = [f for f in os.listdir('.') if f.endswith('.pkl')]
-    if not modelos:
-        print("Nenhum modelo encontrado!")
-        return None
-    
-    print("Modelos disponíveis:")
-    for i, modelo in enumerate(modelos, 1):
-        print(f"{i}. {modelo}")
-    
+    """Continua treinamento de um modelo existente"""
+    print("🔄 CONTINUANDO TREINAMENTO EXISTENTE")
+
+    # 1. Modelos locais da pasta 'modelos_baixados'
+    locais = []
+    if os.path.exists('modelos_baixados'):
+        locais = [f for f in os.listdir('modelos_baixados') if f.endswith('.pkl')]
+
+    # 2. Modelos no Google Drive
+    print("🌐 Buscando modelos no Google Drive...")
+    drive_modelos = listar_arquivos_drive(PASTA_DRIVE_ID)
+
+    if not locais and not drive_modelos:
+        print("❌ Nenhum modelo encontrado!")
+        return
+
+    # 3. Unifica e exibe a lista com origem
+    todos_modelos = []
+    print("📁 Modelos disponíveis:")
+    idx = 1
+
+    for modelo in locais:
+        print(f"{idx}. {modelo} [Local]")
+        todos_modelos.append(('local', modelo))
+        idx += 1
+
+    for modelo in drive_modelos:
+            print(f"{idx}. {modelo['name']} [Drive]")
+            todos_modelos.append(('drive', modelo))
+            idx += 1
+
     try:
         escolha = int(input("Escolha um modelo: ")) - 1
-        nome_arquivo = modelos[escolha]
+        origem, nome = todos_modelos[escolha]
     except:
-        print("Escolha inválida!")
-        return None
-    
+        print("❌ Escolha inválida!")
+        return
+
+    # 4. Lida com o download se for do Drive
+    if origem == 'drive':
+        nome_drive = nome["name"]
+        nome_local = f"modelos_baixados/{nome_drive}"
+        print(f"⬇️ Baixando '{nome_drive}' do Google Drive...")
+        baixar_arquivo_drive(nome["id"], nome_drive)
+    else:
+        nome_local = f"modelos_baixados/{nome}"
+
+    # 5. Carrega o agente com o modelo escolhido
     agente = QlearningAgent()
-    agente.carregar_modelo(nome_arquivo)
-    
-    episodios_extras = int(input("Quantos episódios adicionais: ") or "50000")
-    
-    print("Oponente: 1-Aleatório, 2-Minimax")
-    oponente = "minimax" if input("Escolha: ") == "2" else "aleatorio"
-    
-    # Reduz epsilon para menos exploração (já aprendeu bastante)
-    agente.epsilon = max(agente.epsilon, 0.1)
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    novo_nome = f"{nome_arquivo.split('.')[0]}_cont_{timestamp}.pkl"
-    
+    agente.carregar_modelo(nome_local)
+
+    print(f"Modelo carregado de {nome_local}")
+    print(f"Q-table com {len(agente.q_table)} entradas")
+
+    episodios_extras = int(input("Quantos episódios extras? (padrão 10000): ") or "10000")
+    oponente = input("Contra quem treinar? (aleatorio/minimax, padrão minimax): ") or "minimax"
+
+    agente.epsilon = max(0.1, agente.epsilon)
+
+    nome_base = nome["name"] if origem == "drive" else nome
+    novo_nome = nome_base.replace(".pkl", f"_plus{episodios_extras}.pkl")
+
     agente.treinar(
         num_episodios=episodios_extras,
         oponente=oponente,
-        salvar_a_cada=max(500, episodios_extras//20),
+        salvar_a_cada=max(1000, episodios_extras // 10),
         nome_arquivo=novo_nome
     )
-    
+
+    print(f"✅ Treinamento adicional concluído! Modelo salvo como: {novo_nome}")
     return agente
 
 if __name__ == "__main__":
-    menu_treinamento_otimizado()
+    print("🎯 SISTEMA DE TREINAMENTO INTENSIVO - HEX Q-LEARNING")
+    print("=" * 60)
+    print("1. 🚀 Treinamento Intensivo Completo (~60k episódios)")
+    print("2. ⚡ Treinamento Rápido para Teste (5k episódios)")
+    print("3. 🔄 Continuar Treinamento Existente")
+    print("4. 🎮 Testar Modelo Existente")
+    
+    opcao = input("\nEscolha uma opção: ").strip()
+    
+    if opcao == "1":
+        agente = treinar_agente_intensivo()
+        
+        # Opção de jogar imediatamente
+        jogar = input("\n🎮 Quer jogar contra o agente agora? (s/n): ").lower()
+        if jogar == 's':
+            agente.jogar_contra_humano()
+            
+    elif opcao == "2":
+        agente = treinar_rapido()
+        
+        jogar = input("\n🎮 Quer jogar contra o agente? (s/n): ").lower()
+        if jogar == 's':
+            agente.jogar_contra_humano()
+            
+    elif opcao == "3":
+        continuar_treinamento_existente()
+        
+    elif opcao == "4":
+        # Testar modelo existente
+        print("🎮 TESTAR MODELO EXISTENTE")
+
+        # Modelos locais
+        locais = []
+        if os.path.exists('modelos_baixados'):
+            locais = [f for f in os.listdir('modelos_baixados') if f.endswith('.pkl')]
+
+        # Modelos do Google Drive
+        print("🌐 Buscando modelos no Google Drive...")
+        drive_modelos = listar_arquivos_drive(PASTA_DRIVE_ID)
+
+        if not locais and not drive_modelos:
+            print("❌ Nenhum modelo encontrado!")
+        else:
+            todos_modelos = []
+            print("📁 Modelos disponíveis:")
+            idx = 1
+
+            for modelo in locais:
+                print(f"{idx}. {modelo} [Local]")
+                todos_modelos.append(('local', modelo))
+                idx += 1
+
+            for modelo in drive_modelos:
+                print(f"{idx}. {modelo['name']} [Drive]")
+                todos_modelos.append(('drive', modelo))
+                idx += 1
+
+            try:
+                escolha = int(input("Escolha um modelo: ")) - 1
+                origem, nome = todos_modelos[escolha]
+            except:
+                print("❌ Escolha inválida!")
+            else:
+                if origem == 'drive':
+                    nome_drive = nome["name"]
+                    print(f"⬇️ Baixando '{nome_drive}' do Google Drive...")
+                    baixar_arquivo_drive(nome["id"], nome_drive)
+                    nome_local = f"modelos_baixados/{nome_drive}"
+                else:
+                    nome_local = f"modelos_baixados/{nome}"
+
+                agente = QlearningAgent()
+                agente.carregar_modelo(nome_local)
+
+                print("🔬 Testando modelo...")
+                avaliar_agente(agente, "Teste")
+
+                jogar = input("\n🎮 Quer jogar contra ele? (s/n): ").lower()
+                if jogar == 's':
+                    agente.jogar_contra_humano()

@@ -6,6 +6,12 @@ import time
 from collections import defaultdict
 import matplotlib.pyplot as plt
 from hexGame import JogoHex
+from utils import listar_arquivos_drive, baixar_arquivo_drive
+
+CAMINHO_MODELOS = "modelos_baixados" # modelos baixados do drive
+os.makedirs(CAMINHO_MODELOS, exist_ok=True)
+
+PASTA_DRIVE_ID = "1_PeNiEZy8jhmNWNFVES3bPXU6g8TNzjn"  # ID da pasta do seu Drive
 
 class QlearningAgent:
     def __init__(self, tamanho_tabuleiro=11, alpha=0.1, gamma=0.9, epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01):
@@ -296,31 +302,39 @@ class QlearningAgent:
         self.salvar_modelo(nome_arquivo)
     
     def salvar_modelo(self, nome_arquivo):
-        """Salva o modelo treinado usando pickle"""
-        try:
-            dados = {
-                'q_table': dict(self.q_table),
-                'parametros': {
-                    'tamanho_tabuleiro': self.tamanho_tabuleiro,
-                    'alpha': self.alpha,
-                    'gamma': self.gamma,
-                    'epsilon': self.epsilon,
-                    'epsilon_decay': self.epsilon_decay,
-                    'epsilon_min': self.epsilon_min
-                },
-                'metricas': {
-                    'vitorias': self.vitorias,
-                    'derrotas': self.derrotas,
-                    'empates': self.empates,
-                    'historico_epsilon': self.historico_epsilon
+        """Salva o modelo treinado de forma assíncrona usando pickle"""
+        def salvar():
+            try:
+                dados = {
+                    'q_table': dict(self.q_table),
+                    'parametros': {
+                        'tamanho_tabuleiro': self.tamanho_tabuleiro,
+                        'alpha': self.alpha,
+                        'gamma': self.gamma,
+                        'epsilon': self.epsilon,
+                        'epsilon_decay': self.epsilon_decay,
+                        'epsilon_min': self.epsilon_min
+                    },
+                    'metricas': {
+                        'vitorias': self.vitorias,
+                        'derrotas': self.derrotas,
+                        'empates': self.empates,
+                        'historico_epsilon': self.historico_epsilon
+                    }
                 }
-            }
-            
-            with open(nome_arquivo, 'wb') as f:
-                pickle.dump(dados, f)
-            print(f"Modelo salvo em {nome_arquivo}")
-        except Exception as e:
-            print(f"Erro ao salvar modelo: {e}")
+
+                caminho = r"G:\Meu Drive\HexGameQTable"
+                os.makedirs(caminho, exist_ok=True)
+
+                destino = os.path.join(caminho, nome_arquivo)
+                with open(destino, 'wb') as f:
+                    pickle.dump(dados, f)
+                print(f"[✓] Modelo salvo assíncronamente em: {destino}")
+            except Exception as e:
+                print(f"[Erro ao salvar modelo assíncrono]: {e}")
+
+        # Inicia o salvamento em uma nova thread
+        threading.Thread(target=salvar).start()
     
     def carregar_modelo(self, nome_arquivo):
         """Carrega um modelo salvo"""
@@ -523,18 +537,82 @@ if __name__ == "__main__":
             agente.jogar_contra_humano()
     
     elif escolha == '2':
-        arquivo = input("Nome do arquivo (padrão qlearning_agent.pkl): ") or "qlearning_agent.pkl"
-        if os.path.exists(arquivo):
-            agente.carregar_modelo(arquivo)
-            agente.jogar_contra_humano()
+        print("\n=== CARREGAR MODELO EXISTENTE ===")
+        print("🌐 Buscando modelos no Google Drive...")
+        arquivos_drive = listar_arquivos_drive(PASTA_DRIVE_ID)
+        modelos_drive = [
+            {"name": f["name"], "id": f["id"], "origem": "drive"}
+            for f in arquivos_drive if f["name"].endswith(".pkl")
+        ]
+
+        print("📁 Buscando modelos locais...")
+        modelos_locais = [
+            {"name": f, "origem": "local"}
+            for f in os.listdir(CAMINHO_MODELOS) if f.endswith(".pkl")
+        ]
+
+        modelos_todos = modelos_locais + modelos_drive
+
+        if not modelos_todos:
+            print("❌ Nenhum modelo disponível!")
         else:
-            print("Arquivo não encontrado!")
+            print("\nModelos disponíveis:")
+            for i, modelo in enumerate(modelos_todos, 1):
+                origem = "[Local]" if modelo["origem"] == "local" else "[Drive]"
+                print(f"{i}. {modelo['name']} {origem}")
+
+            try:
+                escolha_modelo = int(input("Escolha um modelo (número): ")) - 1
+                modelo_escolhido = modelos_todos[escolha_modelo]
+
+                if modelo_escolhido["origem"] == "local":
+                    caminho = os.path.join(CAMINHO_MODELOS, modelo_escolhido["name"])
+                else:
+                    caminho = baixar_arquivo_drive(modelo_escolhido["id"], modelo_escolhido["name"])
+
+                agente.carregar_modelo(caminho)
+                agente.jogar_contra_humano()
+
+            except Exception as e:
+                print(f"❌ Erro ao carregar modelo: {e}")
     
     elif escolha == '3':
-        arquivo = input("Nome do arquivo do agente Q-Learning: ") or "qlearning_agent.pkl"
-        if os.path.exists(arquivo):
-            agente.carregar_modelo(arquivo)
-            num_jogos = int(input("Número de jogos para comparação (padrão 50): ") or "50")
-            comparar_agentes(agente, num_jogos=num_jogos, tamanho_tabuleiro=agente.tamanho_tabuleiro)
+        print("\n=== COMPARAÇÃO Q-LEARNING VS MINIMAX ===")
+        print("🌐 Buscando modelos no Google Drive...")
+        arquivos_drive = listar_arquivos_drive(PASTA_DRIVE_ID)
+        modelos_drive = [
+            {"name": f["name"], "id": f["id"], "origem": "drive"}
+            for f in arquivos_drive if f["name"].endswith(".pkl")
+        ]
+
+        print("📁 Buscando modelos locais...")
+        modelos_locais = [
+            {"name": f, "origem": "local"}
+            for f in os.listdir(CAMINHO_MODELOS) if f.endswith(".pkl")
+        ]
+
+        modelos_todos = modelos_locais + modelos_drive
+
+        if not modelos_todos:
+            print("❌ Nenhum modelo disponível para comparação!")
         else:
-            print("Arquivo não encontrado!")
+            print("\nModelos disponíveis:")
+            for i, modelo in enumerate(modelos_todos, 1):
+                origem = "[Local]" if modelo["origem"] == "local" else "[Drive]"
+                print(f"{i}. {modelo['name']} {origem}")
+
+            try:
+                escolha_modelo = int(input("Escolha um modelo (número): ")) - 1
+                modelo_escolhido = modelos_todos[escolha_modelo]
+
+                if modelo_escolhido["origem"] == "local":
+                    caminho = os.path.join(CAMINHO_MODELOS, modelo_escolhido["name"])
+                else:
+                    caminho = baixar_arquivo_drive(modelo_escolhido["id"], modelo_escolhido["name"])
+
+                agente.carregar_modelo(caminho)
+                num_jogos = int(input("Número de jogos para comparação (padrão 50): ") or "50")
+                comparar_agentes(agente, num_jogos=num_jogos, tamanho_tabuleiro=agente.tamanho_tabuleiro)
+
+            except Exception as e:
+                print(f"❌ Erro ao carregar/comparar modelo: {e}")
