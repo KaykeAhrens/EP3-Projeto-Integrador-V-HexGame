@@ -1,41 +1,63 @@
 import numpy as np
 import heapq
+from colorama import init, Fore, Style
+init(autoreset=True)
 
 class JogoHex:
     def __init__(self, tamanho=11):
         self.tamanho = tamanho
-        self.tabuleiro = np.full((tamanho, tamanho), '.', dtype=str)
+        self.tabuleiro = np.full((tamanho, tamanho), '⬡', dtype=str)
         self.jogador_atual = 'X'
         self.modo_jogo = None
         self.dificuldade = 2
+        # Variáveis para a regra de swap (pie rule)
+        self.swap_available = True
+        self.first_move = None  # guarda a posição do primeiro movimento
 
     def exibir_tabuleiro(self):
-        print("\n=====================================")
-        print("X vence conectando esquerda e direita")
-        print("O vence conectando topo e base")
-        print("=====================================\n")
+        # Cabeçalho
+        print("\n==========================================")
+        print(f"{Fore.RED}⬢{Style.RESET_ALL} vence conectando esquerda ↔ direita")
+        print(f"{Fore.CYAN}⬢{Style.RESET_ALL} vence conectando topo ↓ base")
+        print("==========================================\n")
         print("   " + "   ".join(f"{i}" for i in range(self.tamanho)))
+        # Linhas
         for linha in range(self.tamanho):
             espacamento = " " * (2 * linha)
-            linha_tabuleiro = "   ".join(self.tabuleiro[linha])
+            glyphs = []
+            for j in range(self.tamanho):
+                val = self.tabuleiro[linha, j]
+                if val == 'X':
+                    # Hexágono cheio vermelho
+                    glyph = Fore.RED   + '⬢' + Style.RESET_ALL
+                elif val == 'O':
+                    # Hexágono cheio azul
+                    glyph = Fore.CYAN  + '⬢' + Style.RESET_ALL
+                else:
+                    # Hexágono contornado (vazio)
+                    glyph = '⬡'
+                glyphs.append(glyph)
+            linha_tabuleiro = "   ".join(glyphs)
             print(f"{espacamento}{linha:2} {linha_tabuleiro}  {linha}")
-        print()
+        # Rodapé alinhado sob a última linha
+        n = self.tamanho
+        prefixo_rodape = " " * (2*(n-1) + 3 + 1)
+        print(prefixo_rodape + "   ".join(f"{i}" for i in range(n)) + "\n")
 
     def movimento_valido(self, linha, coluna):
-        return 0 <= linha < self.tamanho and 0 <= coluna < self.tamanho and self.tabuleiro[linha, coluna] == '.'
+        return 0 <= linha < self.tamanho and 0 <= coluna < self.tamanho and self.tabuleiro[linha, coluna] == '⬡'
 
     def fazer_movimento(self, linha, coluna):
-        if self.movimento_valido(linha, coluna):
-            self.tabuleiro[linha, coluna] = self.jogador_atual
-            if self.verificar_vitoria(self.jogador_atual):
-                print("\n=====================================")
-                print(f"🎉 Jogador {self.jogador_atual} venceu! 🎉")
-                print("=====================================")
-                self.exibir_tabuleiro()
-                return True
-            self.jogador_atual = 'O' if self.jogador_atual == 'X' else 'X'
+        if not self.movimento_valido(linha, coluna):
+            return False
+        self.tabuleiro[linha, coluna] = self.jogador_atual
+        if self.first_move is None:
+            self.first_move = (linha, coluna)
+        if self.verificar_vitoria(self.jogador_atual):
+            print(f"🎉 Jogador {self.jogador_atual} venceu! 🎉")
             return True
-        return False
+        self.jogador_atual = 'O' if self.jogador_atual == 'X' else 'X'
+        return True
 
     def verificar_vitoria(self, jogador):
         visitados = set()
@@ -92,7 +114,7 @@ class JogoHex:
                 if 0 <= nl < tamanho and 0 <= nc < tamanho and not visitado[nl, nc]:
                     if self.tabuleiro[nl, nc] == jogador:
                         heapq.heappush(heap, (custo, nl, nc))
-                    elif self.tabuleiro[nl, nc] == '.':
+                    elif self.tabuleiro[nl, nc] == '⬡':
                         heapq.heappush(heap, (custo + 1, nl, nc))
         return 0
 
@@ -103,7 +125,7 @@ class JogoHex:
         sucessores = []
         for linha in range(self.tamanho):
             for coluna in range(self.tamanho):
-                if self.tabuleiro[linha, coluna] == '.':
+                if self.tabuleiro[linha, coluna] == '⬡':
                     novo_tabuleiro = self.tabuleiro.copy()
                     novo_tabuleiro[linha, coluna] = self.jogador_atual
                     sucessores.append((linha, coluna, novo_tabuleiro))
@@ -138,7 +160,7 @@ class JogoHex:
         oponente = 'O' if jogador_atual == 'X' else 'X'
         
         # Simulamos todos os movimentos possíveis
-        movimentos_vazios = [(i, j) for i in range(self.tamanho) for j in range(self.tamanho) if self.tabuleiro[i, j] == '.']
+        movimentos_vazios = [(i, j) for i in range(self.tamanho) for j in range(self.tamanho) if self.tabuleiro[i, j] == '⬡']
         
         # Para reduzir o espaço de busca em tabuleiros grandes, priorizamos células próximas às existentes
         if len(movimentos_vazios) > 30:
@@ -150,7 +172,7 @@ class JogoHex:
                 for dl, dc in direcoes:
                     nova_l, nova_c = linha + dl, coluna + dc
                     if (0 <= nova_l < self.tamanho and 0 <= nova_c < self.tamanho and 
-                        self.tabuleiro[nova_l, nova_c] != '.'):
+                        self.tabuleiro[nova_l, nova_c] != '⬡'):
                         movimentos_prioritarios.append((linha, coluna))
                         break
             
@@ -201,7 +223,7 @@ class JogoHex:
         melhores_jogadas = []
         
         # Caso especial: primeira jogada no centro ou próxima ao centro
-        celulas_vazias = np.sum(self.tabuleiro == '.')
+        celulas_vazias = np.sum(self.tabuleiro == '⬡')
         if celulas_vazias == self.tamanho * self.tamanho or celulas_vazias == self.tamanho * self.tamanho - 1:
             centro = self.tamanho // 2
             return centro, centro
@@ -213,7 +235,7 @@ class JogoHex:
             profundidade_maxima = min(self.dificuldade, 2)
         
         # Encontrar todas as jogadas possíveis
-        movimentos_vazios = [(i, j) for i in range(self.tamanho) for j in range(self.tamanho) if self.tabuleiro[i, j] == '.']
+        movimentos_vazios = [(i, j) for i in range(self.tamanho) for j in range(self.tamanho) if self.tabuleiro[i, j] == '⬡']
         
         # Para reduzir o espaço de busca em tabuleiros grandes, priorizamos células próximas às existentes
         if len(movimentos_vazios) > 30:
@@ -225,7 +247,7 @@ class JogoHex:
                 for dl, dc in direcoes:
                     nova_l, nova_c = linha + dl, coluna + dc
                     if (0 <= nova_l < self.tamanho and 0 <= nova_c < self.tamanho and 
-                        self.tabuleiro[nova_l, nova_c] != '.'):
+                        self.tabuleiro[nova_l, nova_c] != '⬡'):
                         movimentos_prioritarios.append((linha, coluna))
                         break
             
@@ -256,23 +278,27 @@ class JogoHex:
             return melhores_jogadas[np.random.randint(0, len(melhores_jogadas))]
         
         # Escolhe uma jogada aleatória se algo der errado
-        vazios = np.where(self.tabuleiro == '.')
+        vazios = np.where(self.tabuleiro == '⬡')
         indice = np.random.randint(0, len(vazios[0]))
         return vazios[0][indice], vazios[1][indice]
 
     def jogar(self):
+        swap_available = True
+        move_count = 0
+        first_move = None
+
+        # escolher modo HH ou HI
         while self.modo_jogo not in ['HH', 'HI']:
             self.modo_jogo = input("Escolha o modo de jogo (HH para Humano vs Humano, HI para Humano vs IA): ").upper()
-            if self.modo_jogo not in ['HH', 'HI']:
-                print("Opção inválida! Digite HH ou HI.")
 
+        # no modo HI, pergunta quem será X ou O e a dificuldade
         if self.modo_jogo == 'HI':
             humano_jogador = None
             while humano_jogador not in ['X', 'O']:
-                humano_jogador = input("Você quer jogar com X (esquerda-direita) ou O (topo-base)? ").upper()
-                if humano_jogador not in ['X', 'O']:
-                    print("Opção inválida! Digite X ou O.")
-
+                prompt = (
+                    f"Você quer jogar com o {Fore.RED}⬢{Style.RESET_ALL} (X) ou {Fore.CYAN}⬢{Style.RESET_ALL} (O)? "
+                )
+                humano_jogador = input(prompt).upper()
             ia_jogador = 'O' if humano_jogador == 'X' else 'X'
 
             while True:
@@ -281,37 +307,90 @@ class JogoHex:
                     if 1 <= dif <= 3:
                         self.dificuldade = dif
                         break
-                    print("Por favor, escolha um nível entre 1 e 3.")
                 except ValueError:
-                    print("Por favor, digite um número válido.")
+                    pass
 
+        # exibe o tabuleiro inicial
         self.exibir_tabuleiro()
 
         while True:
             print(f"Jogador {self.jogador_atual}, sua vez!")
-            print(f"Avaliando o tabuleiro para o Jogador {self.jogador_atual}: {self.calcular_utilidade(self.jogador_atual)} pontos")
+            print(f"Avaliando o tabuleiro: {self.calcular_utilidade(self.jogador_atual)} pontos")
 
-            if self.modo_jogo == 'HI' and self.jogador_atual == ia_jogador:
-                print(f"IA (jogador {ia_jogador}) está jogando...")
-                linha, coluna = self.melhor_jogada_ia()
-                print(f"IA jogou na posição: {linha}, {coluna}")
-
-                if self.fazer_movimento(linha, coluna):
-                    if self.verificar_vitoria('X') or self.verificar_vitoria('O'):
-                        break
-                    self.exibir_tabuleiro()
-                else:
-                    print("\n❌ Movimento inválido da IA, tente novamente.\n")
-            else:
+            # turno do X sempre lê coordenadas do usuário
+            if self.jogador_atual == 'X':
                 sucessores = self.gerar_sucessores()
                 print(f"Total de sucessores possíveis: {len(sucessores)}")
                 try:
-                    linha, coluna = map(int, input("Digite uma linha e uma coluna (ex: 3 4): ").split())
-                    if self.fazer_movimento(linha, coluna):
-                        if self.verificar_vitoria('X') or self.verificar_vitoria('O'):
-                            break
-                        self.exibir_tabuleiro()
-                    else:
-                        print("\n❌ Movimento inválido, tente novamente.\n")
+                    linha, coluna = map(int, input("Digite linha e coluna (ex: 3 4): ").split())
                 except ValueError:
-                    print("\n⚠️ Entrada inválida! Use números separados por espaço.\n")
+                    print("Entrada inválida! Use números separados por espaço.")
+                    continue
+                if not self.fazer_movimento(linha, coluna):
+                    print("Movimento inválido!")
+                    continue
+                if first_move is None:
+                    first_move = (linha, coluna)
+                move_count += 1
+                self.exibir_tabuleiro()
+
+            # turno do O no modo HH (humano)
+            elif self.modo_jogo == 'HH':
+                # oferta de swap apenas na primeira jogada de O
+                if move_count == 1 and swap_available:
+                    swap_available = False
+                    resp = input("Deseja trocar a primeira peça do adversário por um hexágono da sua cor? (s/n): ").strip().lower()
+                    if resp == 's':
+                        i, j = first_move
+                        self.tabuleiro[i, j] = 'O'
+                        print("🔄 Jogador O realizou swap!")
+                        self.jogador_atual = 'X'
+                        move_count += 1
+                        self.exibir_tabuleiro()
+                        continue
+                # se não swap, lê normalmente
+                sucessores = self.gerar_sucessores()
+                print(f"Total de sucessores possíveis: {len(sucessores)}")
+                try:
+                    linha, coluna = map(int, input("Digite linha e coluna (ex: 3 4): ").split())
+                except ValueError:
+                    print("Entrada inválida! Use números separados por espaço.")
+                    continue
+                if not self.fazer_movimento(linha, coluna):
+                    print("Movimento inválido!")
+                    continue
+                move_count += 1
+                self.exibir_tabuleiro()
+
+            # turno do O no modo HI (IA)
+            else:
+                # oferta de swap estratégico
+                if move_count == 1 and swap_available:
+                    swap_available = False
+                    i, j = first_move
+                    util_before = self.calcular_utilidade('O')
+                    # simula troca
+                    old = self.tabuleiro[i, j]
+                    self.tabuleiro[i, j] = 'O'
+                    util_after = self.calcular_utilidade('O')
+                    self.tabuleiro[i, j] = old
+                    if util_after > util_before:
+                        self.tabuleiro[i, j] = 'O'
+                        print("🔄 IA realizou swap estratégico!")
+                        self.jogador_atual = 'X'
+                        move_count += 1
+                        self.exibir_tabuleiro()
+                        continue
+                # jogada normal da IA
+                print(f"IA ({ia_jogador}) está jogando...")
+                linha, coluna = self.melhor_jogada_ia()
+                print(f"IA jogou em {linha}, {coluna}")
+                if not self.fazer_movimento(linha, coluna):
+                    print("Movimento inválido da IA!")
+                    continue
+                move_count += 1
+                self.exibir_tabuleiro()
+
+            # verifica vitória
+            if self.verificar_vitoria('X') or self.verificar_vitoria('O'):
+                break

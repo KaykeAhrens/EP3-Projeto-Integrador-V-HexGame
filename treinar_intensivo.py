@@ -186,6 +186,7 @@ def continuar_treinamento_existente():
     print("🔄 CONTINUANDO TREINAMENTO EXISTENTE")
 
     # 1. Modelos locais da pasta 'modelos_baixados'
+    print("📁 Buscando modelos locais...")
     locais = []
     if os.path.exists('modelos_baixados'):
         locais = [f for f in os.listdir('modelos_baixados') if f.endswith('.pkl')]
@@ -200,7 +201,7 @@ def continuar_treinamento_existente():
 
     # 3. Unifica e exibe a lista com origem
     todos_modelos = []
-    print("📁 Modelos disponíveis:")
+    print("\nModelos disponíveis:")
     idx = 1
 
     for modelo in locais:
@@ -255,7 +256,7 @@ def continuar_treinamento_existente():
     return agente
 
 if __name__ == "__main__":
-    print("🎯 SISTEMA DE TREINAMENTO INTENSIVO - HEX Q-LEARNING")
+    print("🎯 SISTEMA DE TREINAMENTO INTENSIVO - HEX Q-LEARNING 🎯 ")
     print("=" * 60)
     print("1. 🚀 Treinamento Intensivo Completo (~60k episódios)")
     print("2. ⚡ Treinamento Rápido para Teste (5k episódios)")
@@ -287,6 +288,7 @@ if __name__ == "__main__":
         print("🎮 TESTAR MODELO EXISTENTE")
 
         # Modelos locais
+        print("📁 Buscando modelos locais...")
         locais = []
         if os.path.exists('modelos_baixados'):
             locais = [f for f in os.listdir('modelos_baixados') if f.endswith('.pkl')]
@@ -299,7 +301,7 @@ if __name__ == "__main__":
             print("❌ Nenhum modelo encontrado!")
         else:
             todos_modelos = []
-            print("📁 Modelos disponíveis:")
+            print("\nModelos disponíveis:")
             idx = 1
 
             for modelo in locais:

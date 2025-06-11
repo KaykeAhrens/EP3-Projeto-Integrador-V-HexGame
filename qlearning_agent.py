@@ -7,6 +7,8 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 from hexGame import JogoHex
 from utils import listar_arquivos_drive, baixar_arquivo_drive
+from colorama import init, Fore, Style
+init(autoreset=True)
 
 CAMINHO_MODELOS = "modelos_baixados" # modelos baixados do drive
 os.makedirs(CAMINHO_MODELOS, exist_ok=True)
@@ -70,7 +72,7 @@ class QlearningAgent:
         acoes = []
         for linha in range(jogo.tamanho):
             for coluna in range(jogo.tamanho):
-                if jogo.tabuleiro[linha, coluna] == '.':
+                if jogo.tabuleiro[linha, coluna] == '⬡':
                     acoes.append((linha, coluna))
         return acoes
     
@@ -329,9 +331,9 @@ class QlearningAgent:
                 destino = os.path.join(caminho, nome_arquivo)
                 with open(destino, 'wb') as f:
                     pickle.dump(dados, f)
-                print(f"[✓] Modelo salvo assíncronamente em: {destino}")
+                print(f"\n[✓] Modelo salvo assíncronamente em: {destino}\n")
             except Exception as e:
-                print(f"[Erro ao salvar modelo assíncrono]: {e}")
+                print(f"\n[Erro ao salvar modelo assíncrono]: {e}\n")
 
         # Inicia o salvamento em uma nova thread
         threading.Thread(target=salvar).start()
@@ -364,10 +366,13 @@ class QlearningAgent:
     
     def jogar_contra_humano(self):
         """Permite ao agente jogar contra um humano"""
-        jogo = JogoHex(self.tamanho_tabuleiro)
+        jogo = JogoHex(7)
         
         print("=== Q-Learning Agent vs Humano ===")
-        escolha = input("Você quer ser X (esquerda-direita) ou O (topo-base)? ").upper()
+        prompt = (
+                    f"Você quer joga com o {Fore.RED}⬢{Style.RESET_ALL} (X, esquerda-direita) ou {Fore.CYAN}⬢{Style.RESET_ALL} (O, topo-base)?"
+                )
+        escolha = input(prompt).upper()
         
         if escolha not in ['X', 'O']:
             escolha = 'X'
@@ -519,7 +524,7 @@ if __name__ == "__main__":
     agente = QlearningAgent(tamanho_tabuleiro=7, alpha=0.1, gamma=0.9, epsilon=1.0)
     
     print("=== Treinamento do Agente Q-Learning ===")
-    escolha = input("1 - Treinar novo agente\n2 - Carregar agente existente\n3 - Comparar com Minimax\nEscolha: ")
+    escolha = input("1. 🧠 Treinar novo agente\n2. 🤖 Carregar agente existente\n3. ⚔️  Comparar com Minimax\nEscolha: ")
     
     if escolha == '1':
         # Treina o agente
