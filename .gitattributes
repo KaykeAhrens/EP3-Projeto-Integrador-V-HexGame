@@ -1,0 +1,2 @@
+modelos_baixado/qlearningminimax_7x7_60000ep.pkl filter=lfs diff=lfs merge=lfs -text
+modelos_baixados/qlearningminimax_7x7_60000ep.pkl filter=lfs diff=lfs merge=lfs -text
